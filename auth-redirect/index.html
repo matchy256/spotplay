@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spotify 認証コード取得</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body class="bg-dark text-light d-flex align-items-center justify-content-center vh-100">
+
+  <div class="card text-dark shadow-lg" style="max-width: 600px; width: 100%;">
+    <div class="card-body text-center">
+      <h3 class="card-title mb-3">✅ Spotify 認証完了</h3>
+      <p class="card-text">以下のコードをコピーして、スクリプトに貼り付けてください。</p>
+
+      <div class="input-group mb-3">
+        <input id="authCode" type="text" class="form-control" readonly>
+        <button class="btn btn-success" onclick="copyCode()">コピー</button>
+      </div>
+
+      <p class="text-muted small">
+        ※ このコードは短時間のみ有効です。早めにスクリプトに貼り付けてください。
+      </p>
+    </div>
+  </div>
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+  <script>
+    // URLの?code=... を取得
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get("code");
+
+    const input = document.getElementById("authCode");
+    if (code) {
+      input.value = code;
+    } else {
+      input.value = "認証コードが見つかりません。";
+    }
+
+    function copyCode() {
+      if (!input.value || input.value.startsWith("認証コードが")) return;
+      navigator.clipboard.writeText(input.value).then(() => {
+        alert("コピーしました！");
+      });
+    }
+  </script>
+</body>
+</html>
