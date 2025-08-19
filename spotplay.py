@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 load_dotenv()
 CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
-REDIRECT_URI = "https://asia-east2-spotify-cli-283006.cloudfunctions.net/auth-redirect"
+REDIRECT_URI = "https://matchy256.github.io/spotplay/auth-redirect/"
 SCOPE = "playlist-modify-public playlist-modify-private user-modify-playback-state user-read-playback-state"
 
 CONFIG_DIR = os.path.expanduser("~/.config/spotplay")
