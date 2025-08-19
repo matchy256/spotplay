@@ -41,7 +41,7 @@ Spotplayは、Spotifyの再生を手軽にコマンドラインから行うた�
 5.  **"Edit settings"** をクリックします。
 6.  "Redirect URIs"の欄に、以下のURLを追加し、**"Save"** をクリックします。
     ```
-    https://asia-east2-spotify-cli-283006.cloudfunctions.net/auth-redirect
+    https://matchy256.github.io/spotplay/auth-redirect/
     ```
 
 ### 2. .envファイルの設定
@@ -67,8 +67,8 @@ https://accounts.spotify.com/authorize?client_id=...
 ```
 
 1.  表示されたURLにブラウザでアクセスし、Spotifyにログインしてアクセスを許可します。
-2.  承認後、リダイレクト先のページに `?code=XXXXX` のような形式でコードが表示されます。この `XXXXX` の部分が認可コードです。
-3.  認可コードをコピーし、ターミナルの `認可コードを入力してください:` の後に入力してEnterキーを押します。
+2.  承認後、リダイレクト先のページに 「Spotify 認証完了」と表示されるので、「コピー」ボタンをクリックします。
+3.  コピーした認証コードを、ターミナルの `認可コードを入力してください:` の後に入力してEnterキーを押します。
 
 認証が成功すると、認証情報がホームディレクトリ以下の `~/.config/spotplay/` に保存され、次回以降はこの手順は不要になります。
 
