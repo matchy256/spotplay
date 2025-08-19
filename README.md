@@ -61,9 +61,9 @@ SPOTIFY_CLIENT_SECRET="YOUR_SPOTIFY_CLIENT_SECRET"
 
 ```shell
 $ python spotplay.py -l
- 以下のURLに別端末でアクセスしてログインしてください：
+ 以下のURLをブラウザで開き、認証コードを取得してください:
 https://accounts.spotify.com/authorize?client_id=...
-認可コードを入力してください:
+認証コードを入力してください:
 ```
 
 1.  表示されたURLにブラウザでアクセスし、Spotifyにログインしてアクセスを許可します。
