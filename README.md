@@ -19,7 +19,7 @@ Spotplayは、Spotifyの再生を手軽にコマンドラインから行うた�
 
 1.  リポジトリをクローンします。
     ```shell
-    git clone https://github.com/your-username/spotplay.git
+    git clone https://github.com/matchy256/spotplay.git
     cd spotplay
     ```
 
