@@ -133,7 +133,8 @@ python spotplay.py "Stevie Wonder" -d "Echo Dot"
         ```shell
         rm -rf ~/.config/spotplay
         ```
-    3.  再度、`python spotplay.py` を実行し、初回認証からやり直してください。
+    3. spotplay.py と同じディレクトリに .cache というファイルができていたらそれも削除してください
+    4.  再度、`python spotplay.py` を実行し、初回認証からやり直してください。
 
 ## ライセンス
 
