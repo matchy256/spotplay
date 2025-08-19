@@ -220,23 +220,62 @@ def main():
     )
     parser.add_argument(
         "inputs",
-        nargs="+",
+        nargs="*",
+        default=[],
         help="Spotify URI（track/playlist）またはアーティスト名"
     )
+    parser.add_argument(
+        "-l", "--list-devices",
+        action="store_true",
+        help="利用可能なデバイス一覧を表示して終了"
+    )
+    parser.add_argument(
+        "-d", "--device",
+        type=str,
+        default=None,
+        help="再生デバイス名"
+    )
     args = parser.parse_args()
-    inputs = args.inputs
 
     refresh_token = get_refresh_token()
     sp = get_spotify_instance(refresh_token)
+
+    if args.list_devices:
+        devices = sp.devices().get('devices', [])
+        if not devices:
+            print("利用可能なデバイスが見つかりません。")
+            return
+        print("利用可能なデバイス:")
+        for device in devices:
+            active_str = " (アクティブ)" if device.get('is_active') else ""
+            print(f"  - {device['name']}{active_str}")
+        return
+
+    if not args.inputs:
+        parser.print_help()
+        return
+
     user_id = sp.current_user()["id"]
-    device_id = get_active_device(sp)
+    device_id = None
+    if args.device:
+        devices = sp.devices().get('devices', [])
+        for d in devices:
+            if d['name'].lower() == args.device.lower():
+                device_id = d['id']
+                print(f"{d['name']} を再生デバイスに設定しました。")
+                break
+        if not device_id:
+            print(f"警告: デバイス '{args.device}' が見つかりません。アクティブなデバイスで再生します。")
+
+    if not device_id:
+        device_id = get_active_device(sp)
 
     temp_playlist_id = get_or_create_playlist(sp, user_id, FIXED_PLAYLIST_NAME)
     clear_playlist(sp, temp_playlist_id)
 
     all_tracks = []
 
-    for item in inputs:
+    for item in args.inputs:
         if item.startswith("spotify:track:"):
             all_tracks.append(item)
         elif item.startswith("spotify:playlist:"):
