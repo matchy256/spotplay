@@ -19,11 +19,17 @@ load_dotenv()
 CLIENT_ID = os.getenv("SPOTIFY_CLIENT_ID")
 CLIENT_SECRET = os.getenv("SPOTIFY_CLIENT_SECRET")
 REDIRECT_URI = "https://matchy256.github.io/spotplay/auth-redirect/"
-SCOPE = "playlist-modify-public playlist-modify-private user-modify-playback-state user-read-playback-state"
+SCOPE = (
+    "playlist-modify-public "
+    "playlist-modify-private "
+    "user-modify-playback-state "
+    "user-read-playback-state"
+)
 
+# 設定ディレクトリやプレイリストID保存先など
 CONFIG_DIR = os.path.expanduser("~/.config/spotplay")
-TOKEN_FILE = os.path.join(CONFIG_DIR, "refresh_token.txt")
 PLAYLIST_FILE = os.path.join(CONFIG_DIR, "playlist_id.txt")
+CACHE_FILE = os.path.join(CONFIG_DIR, ".cache")
 FIXED_PLAYLIST_NAME = "SpotplayList"
 
 os.makedirs(CONFIG_DIR, exist_ok=True)
@@ -32,55 +38,28 @@ os.makedirs(CONFIG_DIR, exist_ok=True)
 # Spotify 認証・APIクライアント関連
 # -----------------------------
 
-def get_refresh_token():
-    """ローカルに保存されたリフレッシュトークンを取得、またはWeb経由で新規取得する。
-
-    Returns:
-        str: Spotify APIのリフレッシュトークン。
+def get_spotify_client():
     """
-    if os.path.exists(TOKEN_FILE):
-        with open(TOKEN_FILE) as f:
-            return f.read().strip()
-    
-    # Webで認証フローを開始
-    sp_oauth = SpotifyOAuth(
-        client_id=CLIENT_ID,
-        client_secret=CLIENT_SECRET,
-        redirect_uri=REDIRECT_URI,
-        scope=SCOPE,
-        show_dialog=True,
-        cache_path=None
-    )
-    auth_url = sp_oauth.get_authorize_url()
-    print(" 以下のURLに別端末でアクセスしてログインしてください：")
-    print(auth_url)
-    code = input("認可コードを入力してください: ").strip()
-    
-    token_info = sp_oauth.get_access_token(code)
-    refresh_token = token_info["refresh_token"]
-    
-    with open(TOKEN_FILE, "w") as f:
-        f.write(refresh_token)
-    print(f" refresh_token を {TOKEN_FILE} に保存しました。")
-    return refresh_token
-
-def get_spotify_instance(refresh_token):
-    """リフレッシュトークンを使い、Spotify APIクライアントのインスタンスを生成する。
-
-    Args:
-        refresh_token (str): Spotify APIのリフレッシュトークン。
-
-    Returns:
-        spotipy.Spotify: Spotify APIの操作を行うためのクライアントインスタンス。
+    ブラウザを開かず手動コピペ認証フローでSpotify APIクライアントを取得
     """
     sp_oauth = SpotifyOAuth(
         client_id=CLIENT_ID,
         client_secret=CLIENT_SECRET,
         redirect_uri=REDIRECT_URI,
         scope=SCOPE,
-        cache_path=None
+        cache_path=CACHE_FILE,
+        open_browser=False  # 自動ブラウザ起動無効
     )
-    token_info = sp_oauth.refresh_access_token(refresh_token)
+
+    # キャッシュ済みトークンがあれば使用
+    token_info = sp_oauth.get_cached_token()
+    if not token_info:
+        # 認証URLを表示してユーザーにコードを入力してもらう
+        auth_url = sp_oauth.get_authorize_url()
+        print("以下のURLをブラウザで開き、認証コードを取得してください:")
+        print(auth_url)
+        code = input("認証コードを入力してください: ").strip()
+        token_info = sp_oauth.get_access_token(code)
 
     # タイムアウトとリトライを設定したrequestsセッションを作成
     session = requests.Session()
@@ -88,6 +67,7 @@ def get_spotify_instance(refresh_token):
     adapter = HTTPAdapter(max_retries=retries)
     session.mount("https://", adapter)
 
+    # Spotifyクライアントを生成
     sp = spotipy.Spotify(auth=token_info["access_token"], requests_session=session, requests_timeout=30)
     return sp
 
@@ -103,17 +83,17 @@ def get_active_device(sp):
     devices = sp.devices().get("devices", [])
     if not devices:
         raise RuntimeError("アクティブなSpotifyデバイスが見つかりません。")
-    
+
     # アクティブなデバイスを優先
     for d in devices:
         if d.get("is_active") and not d.get("is_restricted"):
             return d["id"]
-            
+
     # アクティブなものがなければ、再生制限のないデバイスを選択
     for d in devices:
         if not d.get("is_restricted"):
             return d["id"]
-            
+
     raise RuntimeError("再生可能なデバイスが見つかりません。")
 
 def handle_device_listing(sp):
@@ -153,7 +133,7 @@ def get_or_create_playlist(sp, user_id, name):
     if os.path.exists(PLAYLIST_FILE):
         with open(PLAYLIST_FILE) as f:
             return f.read().strip()
-            
+
     # 既存のプレイリストを検索
     playlists = sp.current_user_playlists(limit=50).get("items", [])
     for pl in playlists:
@@ -162,7 +142,7 @@ def get_or_create_playlist(sp, user_id, name):
             with open(PLAYLIST_FILE, "w") as f:
                 f.write(playlist_id)
             return playlist_id
-            
+
     # プレイリストを新規作成
     pl = sp.user_playlist_create(user_id, name, public=False)
     playlist_id = pl["id"]
@@ -180,7 +160,7 @@ def clear_playlist(sp, playlist_id):
         track_ids = [t["track"]["id"] for t in items if t.get("track")]
         if not track_ids:
             break
-        
+
         # 100件ずつ削除
         for i in range(0, len(track_ids), 100):
             chunk = track_ids[i:i+100]
@@ -235,7 +215,7 @@ def get_playlist_tracks(sp, playlist_uri):
             return []
         else:
             raise
-            
+
     tracks = []
     while results:
         for item in results.get("items", []):
@@ -296,7 +276,6 @@ def collect_tracks(sp, inputs):
             all_tracks.extend(tracks)
     return all_tracks
 
-
 # -----------------------------
 # メイン処理
 # -----------------------------
@@ -324,8 +303,9 @@ def main():
     args = parser.parse_args()
 
     # --- 認証とAPIクライアント準備 ---
-    refresh_token = get_refresh_token()
-    sp = get_spotify_instance(refresh_token)
+    print("Spotifyに接続しています...")
+    sp = get_spotify_client()
+    print("接続完了。")
 
     # --- デバイス一覧表示 ---
     if args.list_devices:
