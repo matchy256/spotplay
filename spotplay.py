@@ -228,6 +228,28 @@ def get_playlist_tracks(sp, playlist_uri):
             break
     return tracks
 
+def get_album_tracks(sp, album_uri):
+    """アルバムURIから全トラックのURIを取得する。"""
+    try:
+        results = sp.album_tracks(album_uri, limit=50)
+    except spotipy.exceptions.SpotifyException as e:
+        if e.http_status == 404:
+            print(f" Album not found: {album_uri}")
+            return []
+        else:
+            raise
+
+    tracks = []
+    while results:
+        for track in results.get("items", []):
+            if track:
+                tracks.append(track["uri"])
+        if results.get("next"):
+            results = sp.next(results)
+        else:
+            break
+    return tracks
+
 def search_artist_tracks(sp, artist_name, max_tracks=100):
     """アーティスト名でトラックを検索し、URIのリストを返す。"""
     tracks = []
@@ -270,6 +292,10 @@ def collect_tracks(sp, inputs):
             print(f"  - プレイリストからトラックを取得: {item}")
             tracks = get_playlist_tracks(sp, item)
             all_tracks.extend(tracks)
+        elif item.startswith("spotify:album:"):
+            print(f"  - アルバムからトラックを取得: {item}")
+            tracks = get_album_tracks(sp, item)
+            all_tracks.extend(tracks)
         else:
             print(f"  - アーティストからトラックを検索: {item}")
             tracks = search_artist_tracks(sp, item, max_tracks=100)
@@ -287,7 +313,7 @@ def main():
         "inputs",
         nargs="*",
         default=[],
-        help="Spotify URI（track/playlist）またはアーティスト名"
+        help="Spotify URI（track/playlist/album）またはアーティスト名"
     )
     parser.add_argument(
         "-l", "--list-devices",
