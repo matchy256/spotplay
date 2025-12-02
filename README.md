@@ -11,7 +11,7 @@ Spotplayは、Spotifyの再生を手軽にコマンドラインから行うた�
 ## 特徴
 
 -   **シンプルな操作**: 初回認証後は、コマンド一つで再生を開始できます。
--   **柔軟な入力**: アーティスト名、トラックURI、プレイリストURIを自由に組み合わせて指定可能です。
+-   **柔軟な入力**: アーティスト名、トラックURI、アルバムURI、プレイリストURI、番組URIを自由に組み合わせて指定可能です。
 -   **デバイス指定**: 再生するデバイスを名前で指定できます。指定しない場合はアクティブなデバイスが自動で選択されます。
 -   **自動シャッフル**: 指定された曲はシャッフルされてプレイリストに追加されるため、毎回異なる順番で楽しめます。
 
@@ -100,13 +100,29 @@ Spotify URIは、Spotify上のトラック、アルバム、プレイリスト�
 
 このURIをコピーして、コマンドの引数として利用できます。
 
+Spotplayでは、以下の形式のURIに対応しています。
+
+-   `spotify:track:<ID>`: 個別のトラック
+-   `spotify:episode:<ID>`: 個別のポッドキャストエピソード
+-   `spotify:album:<ID>`: アルバムに含まれるすべてのトラック
+-   `spotify:playlist:<ID>`: プレイリストに含まれるすべてのトラックとエピソード
+-   `spotify:show:<ID>`: ポッドキャスト番組。`--latest` オプションの有無によって、取得するエピソードが変わります（後述）。
+
 ### 曲を再生
 
-アーティスト名、トラックURI、プレイリストURIを引数として指定します。複数指定も可能です。
+アーティスト名や、前述の各種Spotify URIを引数として指定します。複数指定も可能です。
 
--dまたは--deviceオプションで再生したいデバイス名を指定できます。指定しない場合は、現在アクティブなデバイスで再生されます。
+#### オプション
 
-**コマンド例:**
+-   `-d <デバイス名>`, `--device <デバイス名>`
+    再生したいデバイス名を指定します。指定しない場合は、現在アクティブなデバイスで再生されます。
+
+-   `--latest`
+    **番組URI (`spotify:show:...`) が指定された場合にのみ有効なオプションです。**
+    -   `--latest` を付けると、その番組の**最新エピソード1件のみ**を再生リストに追加します。
+    -   `--latest` を付けない場合、その番組の**取得可能なすべてのエピソード**を再生リストに追加します。
+
+#### コマンド例
 
 ```shell
 # アーティストの曲を再生
@@ -115,8 +131,14 @@ python spotplay.py "Norah Jones"
 # 複数のアーティストの曲を再生
 python spotplay.py "Miles Davis" "John Coltrane"
 
-# トラックやプレイリストを指定して再生
-python spotplay.py spotify:track:xxxxxxxxxxxxxx spotify:playlist:xxxxxxxxxxxxxx
+# トラック、アルバム、プレイリストを指定して再生
+python spotplay.py spotify:track:xxxxxxxxxxxxxx spotify:album:xxxxxxxxxxxxxx spotify:playlist:xxxxxxxxxxxxxx
+
+# ポッドキャスト番組の最新エピソードを再生
+python spotplay.py spotify:show:xxxxxxxxxxxxxx --latest
+
+# ポッドキャスト番組の全エピソードを再生（--latestなし）
+python spotplay.py spotify:show:xxxxxxxxxxxxxx
 
 # デバイスを指定して再生
 python spotplay.py "Stevie Wonder" -d "Echo Dot"
