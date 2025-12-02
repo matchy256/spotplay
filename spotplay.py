@@ -68,7 +68,7 @@ def get_spotify_client():
     session.mount("https://", adapter)
 
     # Spotifyクライアントを生成
-    sp = spotipy.Spotify(auth=token_info["access_token"], requests_session=session, requests_timeout=30)
+    sp = spotipy.Spotify(auth_manager=sp_oauth, requests_session=session, requests_timeout=30)
     return sp
 
 # -----------------------------
