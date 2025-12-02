@@ -152,20 +152,33 @@ def get_or_create_playlist(sp, user_id, name):
 
 def clear_playlist(sp, playlist_id):
     """
-    プレイリスト内の全トラックを削除する。
+    プレイリスト内の全アイテム（トラックとエピソード）を削除する。
     APIの100件制限を考慮し、分割してリトライ処理も行う。
     """
     while True:
-        items = sp.playlist_items(playlist_id, fields="items.track.id,total", limit=100).get("items", [])
-        track_ids = [t["track"]["id"] for t in items if t.get("track")]
-        if not track_ids:
+        # URIを取得するように fields を設定
+        results = sp.playlist_items(playlist_id, fields="items.track.uri,items.episode.uri,total", limit=100)
+        if not results or not results.get("items"):
+            break
+        items = results["items"]
+
+        # トラックとエピソードのURIを収集
+        uris_to_remove = []
+        for item in items:
+            if item and item.get("track") and item["track"].get("uri"):
+                uris_to_remove.append(item["track"]["uri"])
+            elif item and item.get("episode") and item["episode"].get("uri"):
+                uris_to_remove.append(item["episode"]["uri"])
+
+        if not uris_to_remove:
             break
 
         # 100件ずつ削除
-        for i in range(0, len(track_ids), 100):
-            chunk = track_ids[i:i+100]
+        for i in range(0, len(uris_to_remove), 100):
+            chunk = uris_to_remove[i:i+100]
             for attempt in range(5):
                 try:
+                    # playlist_remove_all_occurrences_of_items を URI で使用
                     sp.playlist_remove_all_occurrences_of_items(playlist_id, chunk)
                     time.sleep(0.5)
                     break
@@ -174,7 +187,17 @@ def clear_playlist(sp, playlist_id):
                     time.sleep(2)
                 except spotipy.exceptions.SpotifyException as e:
                     print(f" 削除失敗: {e}")
-                    break
+                    # レート制限の場合は待機
+                    if e.http_status == 429:
+                        retry_after = int(e.headers.get('Retry-After', 1))
+                        print(f" レート制限のため {retry_after} 秒待機します。")
+                        time.sleep(retry_after)
+                    else:
+                        break  # その他のエラーはリトライを中断
+            else:
+                # 5回試行しても成功しなかった場合
+                print("削除に5回失敗しました。プレイリストのクリアを中止します。")
+                return # 無限ループを避けるため関数を抜ける
 
 def safe_add_to_playlist(sp, playlist_id, track_uris):
     """
@@ -205,8 +228,8 @@ def safe_add_to_playlist(sp, playlist_id, track_uris):
 # トラック収集
 # -----------------------------
 
-def get_playlist_tracks(sp, playlist_uri):
-    """プレイリストURIから全トラックのURIを取得する。"""
+def get_playlist_items(sp, playlist_uri):
+    """プレイリストURIから全アイテム（トラックとエピソード）のURIを取得する。"""
     try:
         results = sp.playlist_items(playlist_uri, limit=100)
     except spotipy.exceptions.SpotifyException as e:
@@ -216,17 +239,25 @@ def get_playlist_tracks(sp, playlist_uri):
         else:
             raise
 
-    tracks = []
+    items = []
     while results:
         for item in results.get("items", []):
+            if not item:
+                continue
+            
             track = item.get("track")
-            if track:
-                tracks.append(track["uri"])
+            if track and track.get("uri"):
+                items.append(track["uri"])
+
+            episode = item.get("episode")
+            if episode and episode.get("uri"):
+                items.append(episode["uri"])
+
         if results.get("next"):
             results = sp.next(results)
         else:
             break
-    return tracks
+    return items
 
 def get_album_tracks(sp, album_uri):
     """アルバムURIから全トラックのURIを取得する。"""
@@ -249,6 +280,31 @@ def get_album_tracks(sp, album_uri):
         else:
             break
     return tracks
+
+def get_show_episodes(sp, show_uri, latest=False):
+    """番組URIからエピソードのURIを取得する。latest=Trueなら最新のみ。"""
+    limit = 1 if latest else 50
+    try:
+        results = sp.show_episodes(show_uri, limit=limit)
+    except spotipy.exceptions.SpotifyException as e:
+        if e.http_status == 404:
+            print(f" Show not found: {show_uri}")
+            return []
+        else:
+            raise
+
+    episodes = []
+    while results:
+        for episode in results.get("items", []):
+            if episode:
+                episodes.append(episode["uri"])
+        
+        # latestフラグがTrueの場合、または次のページがない場合はループを抜ける
+        if latest or not results.get("next"):
+            break
+        results = sp.next(results)
+    
+    return episodes
 
 def search_artist_tracks(sp, artist_name, max_tracks=100):
     """アーティスト名でトラックを検索し、URIのリストを返す。"""
@@ -277,30 +333,40 @@ def search_artist_tracks(sp, artist_name, max_tracks=100):
 
     return tracks
 
-def collect_tracks(sp, inputs):
+def collect_tracks(sp, inputs, latest=False):
     """
-    入力（トラックURI、プレイリストURI、アーティスト名）に基づいて
-    再生対象のトラックURIリストを作成する。
+    入力（トラック/エピソードURI、プレイリスト/アルバム/番組URI、アーティスト名）に基づいて
+    再生対象のURIリストを作成する。
     """
-    all_tracks = []
-    print("トラックを収集しています...")
+    all_items = []
+    print("トラックとエピソードを収集しています...")
     for item in inputs:
         if item.startswith("spotify:track:"):
             print(f"  - トラックを追加: {item}")
-            all_tracks.append(item)
+            all_items.append(item)
+        elif item.startswith("spotify:episode:"):
+            print(f"  - エピソードを追加: {item}")
+            all_items.append(item)
         elif item.startswith("spotify:playlist:"):
-            print(f"  - プレイリストからトラックを取得: {item}")
-            tracks = get_playlist_tracks(sp, item)
-            all_tracks.extend(tracks)
+            print(f"  - プレイリストからアイテムを取得: {item}")
+            items = get_playlist_items(sp, item)
+            all_items.extend(items)
         elif item.startswith("spotify:album:"):
             print(f"  - アルバムからトラックを取得: {item}")
             tracks = get_album_tracks(sp, item)
-            all_tracks.extend(tracks)
+            all_items.extend(tracks)
+        elif item.startswith("spotify:show:"):
+            if latest:
+                print(f"  - 番組から最新エピソードを取得: {item}")
+            else:
+                print(f"  - 番組から全エピソードを取得: {item}")
+            episodes = get_show_episodes(sp, item, latest=latest)
+            all_items.extend(episodes)
         else:
             print(f"  - アーティストからトラックを検索: {item}")
             tracks = search_artist_tracks(sp, item, max_tracks=100)
-            all_tracks.extend(tracks)
-    return all_tracks
+            all_items.extend(tracks)
+    return all_items
 
 # -----------------------------
 # メイン処理
@@ -313,7 +379,12 @@ def main():
         "inputs",
         nargs="*",
         default=[],
-        help="Spotify URI（track/playlist/album）またはアーティスト名"
+        help="Spotify URI（track/episode/playlist/album/show）またはアーティスト名"
+    )
+    parser.add_argument(
+        "--latest",
+        action="store_true",
+        help="番組URIが指定された場合、全エピソードではなく最新のエピソードのみを再生します。"
     )
     parser.add_argument(
         "-l", "--list-devices",
@@ -352,19 +423,19 @@ def main():
     print("一時プレイリストをクリアしています...")
     clear_playlist(sp, temp_playlist_id)
 
-    all_tracks = collect_tracks(sp, args.inputs)
+    all_items = collect_tracks(sp, args.inputs, latest=args.latest)
 
-    if not all_tracks:
-        print("追加する曲が見つかりませんでした。")
+    if not all_items:
+        print("追加するコンテンツが見つかりませんでした。")
         return
 
-    print(f"{len(all_tracks)}曲をプレイリストに追加しています...")
-    safe_add_to_playlist(sp, temp_playlist_id, all_tracks)
+    print(f"{len(all_items)}件のコンテンツをプレイリストに追加しています...")
+    safe_add_to_playlist(sp, temp_playlist_id, all_items)
 
     # --- 再生開始 ---
     print("再生を開始します...")
     sp.start_playback(device_id=device_id, context_uri=f"spotify:playlist:{temp_playlist_id}")
-    print(f"完了: {len(all_tracks)} 曲を再生しました。")
+    print(f"完了: {len(all_items)} 件のコンテンツを再生しました。")
 
 if __name__ == "__main__":
     main()
